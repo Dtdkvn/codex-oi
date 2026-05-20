@@ -98,6 +98,26 @@ codex-oi closeout
 .\scripts\codex-oi.ps1 closeout
 ```
 
+### Use from other agent CLIs
+
+`codex-oi` works with any tool that can shell out. Copy-paste blocks
+ready for each ecosystem live in:
+
+| Tool | Discovery file | Copy block source |
+|---|---|---|
+| **Claude Code** | `~/.claude/skills/codex-oi/SKILL.md` | shipped with installer |
+| **Antigravity** (v1.20.3+) | `AGENTS.md` at project root | [`AGENTS.md`](./AGENTS.md) |
+| **Cursor** | `AGENTS.md` at project root | [`AGENTS.md`](./AGENTS.md) |
+| **Codex CLI** | `AGENTS.md` at project root | [`AGENTS.md`](./AGENTS.md) |
+| **Aider** | `CONVENTIONS.md` at project root | [`CONVENTIONS.md`](./CONVENTIONS.md) |
+| **Gemini CLI** | `~/.gemini/GEMINI.md` (global) or project `GEMINI.md` | reuse [`AGENTS.md`](./AGENTS.md) block |
+| **Continue.dev** | `.continue/config.json` → `systemMessage` | reuse [`AGENTS.md`](./AGENTS.md) block |
+
+After installing `codex-oi`, drop the relevant block into your project
+so the agent learns when to invoke it. The helpers themselves don't
+care which tool calls them — `bash`, `pwsh`, or any subprocess
+spawner works.
+
 If you run the Bash helper from WSL or Git-Bash, install Node/Codex inside that
 shell environment. If Codex is only installed in Windows PATH, prefer the
 PowerShell helper.
