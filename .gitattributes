@@ -1,0 +1,19 @@
+# Shell scripts MUST be LF — CRLF breaks bash on Linux/macOS/WSL.
+*.sh    text eol=lf
+install.sh text eol=lf
+
+# Python scripts — keep LF for cross-platform consistency.
+*.py    text eol=lf
+
+# PowerShell scripts — keep LF as well; pwsh handles both.
+*.ps1   text eol=lf
+
+# Markdown / docs — let Git handle.
+*.md    text
+
+# YAML configs.
+*.yml   text
+*.yaml  text
+
+# Default: auto-detect text vs binary.
+* text=auto
