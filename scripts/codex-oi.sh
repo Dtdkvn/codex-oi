@@ -25,8 +25,13 @@ YOLO="${CODEX_OI_YOLO:-1}"
 TELEMETRY="${CODEX_OI_TELEMETRY:-0}"
 OUTPUT="${CODEX_OI_OUTPUT:-}"
 
+# Engine selector. Default: codex (existing inline path, unchanged).
+# Other engines are loaded from scripts/engines/<name>.sh on demand.
+ENGINE="${CODEX_OI_ENGINE:-codex}"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PARSER="$SCRIPT_DIR/stream-parser.py"
+ENGINES_DIR="$SCRIPT_DIR/engines"
 
 PARALLEL_TESTS=""
 PYTHON_BIN=""
@@ -186,9 +191,6 @@ run_exec() {
     echo "$task"
   } > "$prompt_file"
 
-  local repo
-  repo="$(repo_root)"
-
   local tee_target=()
   if [ -n "$OUTPUT" ]; then
     tee_target=(tee -a "$OUTPUT")
@@ -196,22 +198,41 @@ run_exec() {
     tee_target=(cat)
   fi
 
+  local engine_label="${ENGINE^^}"
   echo "$SECTION_BAR"
-  echo "CODEX SAYS ($mode):"
+  echo "$engine_label SAYS ($mode):"
   echo "$SECTION_BAR"
 
   local exit_code=0
-  set +e
-  # shellcheck disable=SC2086
-  cat "$prompt_file" \
-    | timeout "$TIMEOUT" "$CODEX_BIN" exec \
-        -C "$repo" -s read-only \
-        -c "model_reasoning_effort=\"$effort\"" \
-        --json 2>/dev/null \
-    | $PYTHON_BIN -u "$PARSER" \
-    | "${tee_target[@]}"
-  exit_code=$?
-  set -e
+
+  # Engine dispatch: default 'codex' uses the inline path (unchanged from
+  # the Windows-fix release). Other engines load an adapter from
+  # scripts/engines/<name>.sh that exports engine_invoke.
+  if [ "$ENGINE" = "codex" ]; then
+    local repo
+    repo="$(repo_root)"
+    set +e
+    # shellcheck disable=SC2086
+    cat "$prompt_file" \
+      | timeout "$TIMEOUT" "$CODEX_BIN" exec \
+          -C "$repo" -s read-only \
+          -c "model_reasoning_effort=\"$effort\"" \
+          --json 2>/dev/null \
+      | $PYTHON_BIN -u "$PARSER" \
+      | "${tee_target[@]}"
+    exit_code=$?
+    set -e
+  else
+    # Engine adapter path — adapter reads prompt from stdin, writes output
+    # to stdout. Dispatcher pipes through tee_target so $OUTPUT capture
+    # still works uniformly across engines.
+    set +e
+    cat "$prompt_file" \
+      | engine_invoke "$mode" "$effort" \
+      | "${tee_target[@]}"
+    exit_code=$?
+    set -e
+  fi
 
   echo "$SECTION_BAR"
 
@@ -227,6 +248,25 @@ run_review() {
   local mode="$1"
   shift
   local review_args=("$@")
+
+  # Non-codex engines: delegate to adapter if it provides engine_invoke_review.
+  if [ "$ENGINE" != "codex" ]; then
+    if command -v engine_invoke_review >/dev/null 2>&1; then
+      local engine_label="${ENGINE^^}"
+      echo "$SECTION_BAR"
+      echo "$engine_label SAYS ($mode):"
+      echo "$SECTION_BAR"
+      set +e
+      engine_invoke_review "$mode" "${review_args[@]}"
+      local exit_code=$?
+      set -e
+      echo "$SECTION_BAR"
+      write_telemetry "$mode" "0" "$exit_code"
+      return $exit_code
+    else
+      die "engine '$ENGINE' does not support diff-driven review (closeout/recommit). Use --engine codex."
+    fi
+  fi
 
   if [ "$YOLO" = "1" ]; then
     review_args+=("--dangerously-bypass-approvals-and-sandbox")
@@ -296,14 +336,33 @@ Modes:
                                            | branch [base] | commit <ref>
   recommit <ref>                   Review a single landed commit
 
-Options for closeout/recommit:
+Options:
+  --engine <name>                  Second-opinion engine (default: codex).
+                                   Available: codex, gemini.
+                                   See scripts/engines/README.md to add more.
+
+Options for closeout/recommit (codex engine only):
   --parallel-tests "<cmd>"         Run tests concurrently
   --no-yolo                        Don't pass --dangerously-bypass-approvals
 
 Env vars:
   CODEX_OI_BIN, CODEX_OI_YOLO, CODEX_OI_TIMEOUT, CODEX_OI_TELEMETRY,
-  CODEX_OI_OUTPUT
+  CODEX_OI_OUTPUT, CODEX_OI_ENGINE,
+  GEMINI_API_KEY (for --engine gemini)
 EOF
+}
+
+load_engine_adapter() {
+  local name="$1"
+  local adapter="$ENGINES_DIR/$name.sh"
+  [ -f "$adapter" ] || die "engine adapter not found: $adapter"
+  # shellcheck disable=SC1090
+  source "$adapter"
+  command -v engine_check_runtime >/dev/null 2>&1 \
+    || die "adapter '$name' missing engine_check_runtime"
+  command -v engine_invoke >/dev/null 2>&1 \
+    || die "adapter '$name' missing engine_invoke"
+  engine_check_runtime
 }
 
 main() {
@@ -315,15 +374,11 @@ main() {
       ;;
   esac
 
-  check_codex_runtime
-  require git
-  detect_python
-  repo_root >/dev/null
-
   local mode="$1"
   shift
 
-  # Pull out shared flags
+  # Pull out shared flags (need to do this BEFORE engine setup so --engine
+  # is honored).
   local positional=()
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -334,6 +389,10 @@ main() {
       --no-yolo)
         YOLO=0
         shift
+        ;;
+      --engine)
+        ENGINE="${2:-codex}"
+        shift 2
         ;;
       -h|--help)
         usage
@@ -346,6 +405,17 @@ main() {
     esac
   done
   set -- "${positional[@]:-}"
+
+  # Engine-conditional pre-flight. For codex (default) we keep the
+  # original checks. For other engines we delegate to their adapter.
+  require git
+  detect_python
+  repo_root >/dev/null
+  if [ "$ENGINE" = "codex" ]; then
+    check_codex_runtime
+  else
+    load_engine_adapter "$ENGINE"
+  fi
 
   case "$mode" in
     review)

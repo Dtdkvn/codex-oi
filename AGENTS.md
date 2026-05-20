@@ -48,10 +48,31 @@ Windows-native (no WSL): use `scripts\codex-oi.ps1` with the same modes.
 
 ---
 
+## Pluggable second-opinion engine (`--engine` flag)
+
+Default engine is OpenAI Codex. Other engines available via `--engine`:
+
+```bash
+~/.codex-oi/scripts/codex-oi.sh review file.py "focus" --engine gemini
+```
+
+Currently shipped adapters (Bash dispatcher only; PowerShell mirror TODO):
+
+| Engine | Modes | Auth |
+|---|---|---|
+| `codex` (default) | review, plan, audit, closeout, recommit | `OPENAI_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` |
+| `gemini` | review, plan, audit | `GEMINI_API_KEY` (or `gemini auth login`) |
+
+See [`scripts/engines/README.md`](./scripts/engines/README.md) for the
+adapter interface — adding a new engine (Claude API, Antigravity, etc.)
+is a ~50-line `engines/<name>.sh` file.
+
+---
+
 ## What `codex-oi` does
 
-Wraps OpenAI's [Codex CLI](https://github.com/openai/codex) into a
-unified workflow with:
+Wraps OpenAI's [Codex CLI](https://github.com/openai/codex) (or another
+engine via `--engine`) into a unified workflow with:
 
 - **Project-context preamble** auto-built from `AGENTS.md` / `CLAUDE.md`
   / `.cursorrules` / `README.md` (priority in that order — so this very
