@@ -71,6 +71,8 @@ done
 
 Failure modes:
 - `codex` not in PATH → STOP, instruct user: `npm install -g @openai/codex`
+- Bash sees a Windows `codex` shim but no `node` in that shell → STOP, tell the
+  user to install Node/Codex inside that shell or use `scripts/codex-oi.ps1`
 - Not in a git repo → STOP, instruct user to `cd` into one
 
 ---
@@ -156,9 +158,10 @@ cat > "$PROMPT_FILE" << 'EOF'
 EOF
 
 REPO=$(git rev-parse --show-toplevel)
-codex exec "$(cat "$PROMPT_FILE")" -C "$REPO" -s read-only \
-  -c "model_reasoning_effort=\"$EFFORT\"" \
-  --json 2>/dev/null \
+cat "$PROMPT_FILE" \
+  | codex exec -C "$REPO" -s read-only \
+      -c "model_reasoning_effort=\"$EFFORT\"" \
+      --json 2>/dev/null \
   | python -u "$SKILL_DIR/scripts/stream-parser.py"
 
 rm -f "$PROMPT_FILE"

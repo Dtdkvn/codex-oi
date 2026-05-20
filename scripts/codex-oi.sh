@@ -30,6 +30,7 @@ PARSER="$SCRIPT_DIR/stream-parser.py"
 
 PARALLEL_TESTS=""
 PYTHON_BIN=""
+SECTION_BAR="==========================================================="
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -42,6 +43,23 @@ die() {
 
 require() {
   command -v "$1" >/dev/null 2>&1 || die "'$1' not found in PATH"
+}
+
+check_codex_runtime() {
+  if ! command -v "$CODEX_BIN" >/dev/null 2>&1; then
+    die "'$CODEX_BIN' not found in PATH"
+  fi
+
+  if command -v node >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local codex_path
+  codex_path="$(command -v "$CODEX_BIN" 2>/dev/null || true)"
+  if [ -n "$codex_path" ] && [ -f "$codex_path" ] \
+      && grep -q 'node_modules/@openai/codex/bin/codex.js' "$codex_path"; then
+    die "Codex is installed via a shell shim that needs 'node' in this Bash environment. Install Node/Codex inside this shell, or use scripts/codex-oi.ps1 on Windows."
+  fi
 }
 
 # Detect a working Python 3 — tries python3, python, py -3 in order.
@@ -178,22 +196,24 @@ run_exec() {
     tee_target=(cat)
   fi
 
-  echo "═══════════════════════════════════════════════════════════"
+  echo "$SECTION_BAR"
   echo "CODEX SAYS ($mode):"
-  echo "═══════════════════════════════════════════════════════════"
+  echo "$SECTION_BAR"
 
   local exit_code=0
+  set +e
   # shellcheck disable=SC2086
-  if ! timeout "$TIMEOUT" "$CODEX_BIN" exec "$(cat "$prompt_file")" \
+  cat "$prompt_file" \
+    | timeout "$TIMEOUT" "$CODEX_BIN" exec \
         -C "$repo" -s read-only \
         -c "model_reasoning_effort=\"$effort\"" \
         --json 2>/dev/null \
-        | $PYTHON_BIN -u "$PARSER" \
-        | "${tee_target[@]}"; then
-    exit_code=$?
-  fi
+    | $PYTHON_BIN -u "$PARSER" \
+    | "${tee_target[@]}"
+  exit_code=$?
+  set -e
 
-  echo "═══════════════════════════════════════════════════════════"
+  echo "$SECTION_BAR"
 
   write_telemetry "$mode" "0" "$exit_code"
   return $exit_code
@@ -212,25 +232,27 @@ run_review() {
     review_args+=("--dangerously-bypass-approvals-and-sandbox")
   fi
 
-  echo "═══════════════════════════════════════════════════════════"
+  echo "$SECTION_BAR"
   echo "CODEX SAYS ($mode): $CODEX_BIN review ${review_args[*]}"
-  echo "═══════════════════════════════════════════════════════════"
+  echo "$SECTION_BAR"
 
   local exit_code=0
   if [ -n "$PARALLEL_TESTS" ]; then
     bash -c "$PARALLEL_TESTS" &
     local tests_pid=$!
-    if ! timeout "$TIMEOUT" "$CODEX_BIN" review "${review_args[@]}"; then
-      exit_code=$?
-    fi
+    set +e
+    timeout "$TIMEOUT" "$CODEX_BIN" review "${review_args[@]}"
+    exit_code=$?
+    set -e
     wait "$tests_pid" || true
   else
-    if ! timeout "$TIMEOUT" "$CODEX_BIN" review "${review_args[@]}"; then
-      exit_code=$?
-    fi
+    set +e
+    timeout "$TIMEOUT" "$CODEX_BIN" review "${review_args[@]}"
+    exit_code=$?
+    set -e
   fi
 
-  echo "═══════════════════════════════════════════════════════════"
+  echo "$SECTION_BAR"
 
   if [ "$exit_code" = "0" ]; then
     echo "codex-oi clean: no accepted/actionable findings reported"
@@ -286,8 +308,14 @@ EOF
 
 main() {
   [ $# -ge 1 ] || { usage; exit 0; }
+  case "$1" in
+    -h|--help|help)
+      usage
+      exit 0
+      ;;
+  esac
 
-  require "$CODEX_BIN"
+  check_codex_runtime
   require git
   detect_python
   repo_root >/dev/null

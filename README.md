@@ -63,12 +63,12 @@ subcommands you want for a "second opinion" workflow:
 - **Git** — repo detection
 - **Python 3** — JSON stream parser
 - (optional) **`gh` CLI** — for PR base auto-detection
-- (optional) **bash 4+** OR **PowerShell 7+**
+- (optional) **bash 4+** OR **Windows PowerShell 5.1+ / PowerShell 7+**
 
 ### Install as a Claude Code skill
 
 ```bash
-git clone https://github.com/<your-handle>/codex-oi.git ~/codex-oi
+git clone https://github.com/Dtdkvn/codex-oi.git ~/codex-oi
 cd ~/codex-oi
 ./install.sh        # Unix / macOS / WSL / Git-Bash
 # or
@@ -97,6 +97,10 @@ codex-oi closeout
 .\scripts\codex-oi.ps1 review src\services\login.py
 .\scripts\codex-oi.ps1 closeout
 ```
+
+If you run the Bash helper from WSL or Git-Bash, install Node/Codex inside that
+shell environment. If Codex is only installed in Windows PATH, prefer the
+PowerShell helper.
 
 ---
 
@@ -213,6 +217,10 @@ freely.
 
 **"codex: command not found"**
 Install Codex: `npm install -g @openai/codex`
+
+**"shell shim needs 'node' in this Bash environment"**
+Your Bash session can see the `codex` shim, but not the Node runtime it needs.
+Install Node/Codex inside that shell, or run `.\scripts\codex-oi.ps1` instead.
 
 **"Not in a git repo"**
 Run from inside a git repository. `codex-oi` resolves the repo root via

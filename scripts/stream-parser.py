@@ -7,9 +7,9 @@ human-readable stream on stdout. Surfaces reasoning, agent messages,
 command runs, and token counts; drops framing noise.
 
 Exit code mirrors the upstream Codex turn outcome:
-  0  — turn.completed seen, no error
-  1  — JSON parse error or no completion seen
-  2  — Codex reported an error event
+  0  - turn.completed seen, no error
+  1  - JSON parse error or no completion seen
+  2  - Codex reported an error event
 """
 from __future__ import annotations
 
@@ -25,6 +25,14 @@ def main() -> int:
     for raw in sys.stdin:
         line = raw.strip()
         if not line:
+            continue
+        line = line.lstrip("\ufeff")
+        if line.startswith("ï»¿"):
+            line = line[3:]
+        if line in {
+            "Reading additional input from stdin...",
+            "Reading prompt from stdin...",
+        }:
             continue
         try:
             obj = json.loads(line)
