@@ -29,6 +29,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PARSER="$SCRIPT_DIR/stream-parser.py"
 
 PARALLEL_TESTS=""
+PYTHON_BIN=""
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -41,6 +42,26 @@ die() {
 
 require() {
   command -v "$1" >/dev/null 2>&1 || die "'$1' not found in PATH"
+}
+
+# Detect a working Python 3 — tries python3, python, py -3 in order.
+# On Windows, python3.exe may be the Microsoft Store stub which resolves via
+# `command -v` but errors out on actual execution; we probe with --version.
+detect_python() {
+  for candidate in python3 python "py -3"; do
+    # shellcheck disable=SC2086
+    if $candidate --version >/dev/null 2>&1; then
+      # Confirm it's actually Python 3
+      local ver
+      # shellcheck disable=SC2086
+      ver=$($candidate -c "import sys; print(sys.version_info[0])" 2>/dev/null || true)
+      if [ "$ver" = "3" ]; then
+        PYTHON_BIN="$candidate"
+        return 0
+      fi
+    fi
+  done
+  die "Python 3 not found in PATH (tried: python3, python, py -3)"
 }
 
 repo_root() {
@@ -133,9 +154,11 @@ EOF
 run_exec() {
   local mode="$1" effort="$2" task="$3"
 
-  local prompt_file
-  prompt_file="$(mktemp 2>/dev/null || mktemp -t codex-oi)"
-  trap 'rm -f "$prompt_file"' EXIT
+  # Intentionally NOT `local` — trap fires at script exit (after function
+  # returns), so the variable must remain in scope. Defensive `${var:-}` in
+  # the trap body covers the case where mktemp failed before assignment.
+  prompt_file="$(mktemp 2>/dev/null || mktemp -t codex-oi.XXXXXX)"
+  trap 'rm -f "${prompt_file:-}"' EXIT
 
   {
     filesystem_boundary
@@ -160,11 +183,12 @@ run_exec() {
   echo "═══════════════════════════════════════════════════════════"
 
   local exit_code=0
+  # shellcheck disable=SC2086
   if ! timeout "$TIMEOUT" "$CODEX_BIN" exec "$(cat "$prompt_file")" \
         -C "$repo" -s read-only \
         -c "model_reasoning_effort=\"$effort\"" \
         --json 2>/dev/null \
-        | python3 -u "$PARSER" \
+        | $PYTHON_BIN -u "$PARSER" \
         | "${tee_target[@]}"; then
     exit_code=$?
   fi
@@ -265,7 +289,7 @@ main() {
 
   require "$CODEX_BIN"
   require git
-  require python3
+  detect_python
   repo_root >/dev/null
 
   local mode="$1"
