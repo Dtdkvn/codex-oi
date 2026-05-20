@@ -127,9 +127,9 @@ write_telemetry() {
 # ─────────────────────────────────────────────────────────────────────────────
 
 build_preamble() {
-  local out=""
-  local proj="$(project_name)"
-  local brief="$(git_brief)"
+  local out="" proj brief
+  proj="$(project_name)"
+  brief="$(git_brief)"
 
   out+="PROJECT CONTEXT — $proj"$'\n'
   out+="Branch: $brief"$'\n\n'
@@ -213,11 +213,10 @@ run_exec() {
     repo="$(repo_root)"
     set +e
     # shellcheck disable=SC2086
-    cat "$prompt_file" \
-      | timeout "$TIMEOUT" "$CODEX_BIN" exec \
-          -C "$repo" -s read-only \
-          -c "model_reasoning_effort=\"$effort\"" \
-          --json 2>/dev/null \
+    timeout "$TIMEOUT" "$CODEX_BIN" exec \
+        -C "$repo" -s read-only \
+        -c "model_reasoning_effort=\"$effort\"" \
+        --json < "$prompt_file" 2>/dev/null \
       | $PYTHON_BIN -u "$PARSER" \
       | "${tee_target[@]}"
     exit_code=$?
@@ -227,8 +226,7 @@ run_exec() {
     # to stdout. Dispatcher pipes through tee_target so $OUTPUT capture
     # still works uniformly across engines.
     set +e
-    cat "$prompt_file" \
-      | engine_invoke "$mode" "$effort" \
+    engine_invoke "$mode" "$effort" < "$prompt_file" \
       | "${tee_target[@]}"
     exit_code=$?
     set -e
