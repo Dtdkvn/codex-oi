@@ -1,0 +1,36 @@
+name: shellcheck
+
+on:
+  push:
+    paths:
+      - "scripts/*.sh"
+      - "install.sh"
+      - ".github/workflows/shellcheck.yml"
+  pull_request:
+    paths:
+      - "scripts/*.sh"
+      - "install.sh"
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Lint scripts
+        run: |
+          shellcheck -x scripts/codex-oi.sh
+          shellcheck -x install.sh
+
+  python-syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile-check parser
+        run: python -m py_compile scripts/stream-parser.py
