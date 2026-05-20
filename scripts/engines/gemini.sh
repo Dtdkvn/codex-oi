@@ -23,7 +23,7 @@ engine_check_runtime() {
       && [ -z "${GOOGLE_GENAI_USE_VERTEXAI:-}" ] \
       && [ -z "${GOOGLE_GENAI_USE_GCA:-}" ] \
       && [ ! -f "$HOME/.gemini/settings.json" ]; then
-    die "Gemini auth not configured. Set GEMINI_API_KEY or run 'gemini auth login'."
+    die "Gemini auth not configured. Run 'gemini auth login' (OAuth, free tier — recommended) or set GEMINI_API_KEY (API mode)."
   fi
 }
 
@@ -56,9 +56,13 @@ engine_invoke() {
   local prompt
   prompt="$(cat)"
 
+  # --skip-trust: needed for headless/automated use; without it Gemini
+  # refuses to run unless the cwd was marked trusted interactively.
+  # --approval-mode plan: read-only, closest analog to codex -s read-only.
   # shellcheck disable=SC2086
   timeout "$TIMEOUT" "$GEMINI_BIN" \
     -m "$model" \
+    --skip-trust \
     --approval-mode plan \
     -p "$prompt" 2>&1
 }
