@@ -144,7 +144,8 @@ function Write-Telemetry([string] $ModeName, [string] $Tokens, [int] $ExitCode) 
   $dir = Join-Path $HOME '.codex-oi\logs'
   New-Item -ItemType Directory -Force -Path $dir | Out-Null
 
-  $timestamp = (Get-Date -AsUTC).ToString('yyyy-MM-ddTHH:mm:ssZ')
+  # [DateTime]::UtcNow works on PowerShell 5.1+; Get-Date -AsUTC needs 7.1+.
+  $timestamp = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
   $line = "{`"ts`":`"$timestamp`",`"project`":`"$(Project-Name)`",`"mode`":`"$ModeName`",`"tokens`":`"$Tokens`",`"exit`":`"$ExitCode`"}"
   Add-Content -Path (Join-Path $dir 'usage.jsonl') -Value $line
 }
@@ -214,7 +215,16 @@ function Run-Exec([string] $ModeName, [string] $Effort, [string] $Task) {
       '--json'
     )
 
+    # Scope EAP=Continue around the pipe. The npm-shipped `codex` shim resolves
+    # to codex.ps1 (not codex.cmd) on Windows; its inner `& node ...` writes a
+    # "Reading prompt from stdin..." banner to stderr. Under EAP=Stop, that
+    # stderr line is wrapped as a RemoteException and rethrown — `2>$null` does
+    # NOT suppress nested PowerShell error streams, only native stderr. Without
+    # this scope, every Run-Exec call dies in catch with $exitCode=1 before any
+    # Codex output reaches the parser.
     $exitCode = 0
+    $oldEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     try {
       Get-Content -Raw -Path $promptFile |
         & $CodexBin @codexArgs 2>$null |
@@ -227,7 +237,12 @@ function Run-Exec([string] $ModeName, [string] $Effort, [string] $Task) {
         }
       $exitCode = $LASTEXITCODE
     } catch {
+      # Surface the exception instead of swallowing — silent catch was the
+      # reason this class of bug went undiagnosed for a release cycle.
+      Write-Host "codex-oi error in Run-Exec: $($_.Exception.Message)"
       $exitCode = 1
+    } finally {
+      $ErrorActionPreference = $oldEAP
     }
 
     Write-Host $SectionBar
@@ -255,12 +270,19 @@ function Run-Review([string] $ModeName, [string[]] $ReviewArgs) {
     } -ArgumentList $ParallelTests
   }
 
+  # Same EAP-scoping rationale as Run-Exec: codex.ps1 npm shim writes banner
+  # text to stderr that PowerShell wraps as a RemoteException under EAP=Stop.
   $exitCode = 0
+  $oldEAP = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
   try {
     & $CodexBin review @ReviewArgs
     $exitCode = $LASTEXITCODE
   } catch {
+    Write-Host "codex-oi error in Run-Review: $($_.Exception.Message)"
     $exitCode = 1
+  } finally {
+    $ErrorActionPreference = $oldEAP
   }
 
   if ($job) {
