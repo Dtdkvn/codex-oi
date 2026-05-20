@@ -1,25 +1,35 @@
 # codex-oi
 
-> **Codex CLI second-opinion bridge for Claude Code.**
-> Five modes, two engines, one workflow — get OpenAI's Codex to audit your
-> code, challenge your plans, and review your diffs from inside Claude Code.
+> **Universal second-opinion bridge for AI coding agents.**
+> Five modes, pluggable engines, one workflow — let your coding agent
+> (Claude Code, Cursor, Antigravity, Codex CLI, Aider, Gemini CLI,
+> Continue.dev) ask a different AI for a sanity check without leaving
+> the terminal.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-![Status: alpha](https://img.shields.io/badge/status-alpha-orange)
+![Status: beta](https://img.shields.io/badge/status-beta-yellow)
 ![Platform: Bash + PowerShell](https://img.shields.io/badge/platform-Bash%20%2B%20PowerShell-blue)
+![Engines: Codex + Gemini](https://img.shields.io/badge/engines-codex%20%2B%20gemini-blueviolet)
 
 ---
 
 ## What it does
 
-Codex CLI is OpenAI's official command-line AI. It has two distinct
-subcommands you want for a "second opinion" workflow:
+`codex-oi` plugs into your existing AI coding agent and gives it a way
+to ask a **different model** for a sanity check — without context-
+switching or leaving the terminal.
+
+**Default engine: OpenAI's [Codex CLI](https://github.com/openai/codex)**
+because it has two purpose-built subcommands for this:
 
 - **`codex exec`** — free-form prompt, great for custom audits / plan reviews
 - **`codex review`** — structured diff findings, great for closeout before
   commit/ship
 
-`codex-oi` wraps both under one skill with shared niceties:
+**Other engines** via `--engine` plugin system (currently shipped: `gemini`
+— full list in [`scripts/engines/README.md`](./scripts/engines/README.md)).
+
+`codex-oi` wraps it all with shared infrastructure:
 
 - **Project-context preamble** — auto-detects `CLAUDE.md`, `AGENTS.md`,
   `.cursorrules`, or `README.md` and feeds Codex the right project conventions

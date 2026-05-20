@@ -3,6 +3,51 @@
 All notable changes to `codex-oi` follow [Keep a Changelog](https://keepachangelog.com/)
 and [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] — multi-tool + multi-engine — 2026-05-20
+
+### Added
+- **Cross-tool integration** so any compatible agent can discover and
+  invoke codex-oi:
+  - `AGENTS.md` — Antigravity (v1.20.3+), Cursor, Codex CLI, Claude Code
+  - `CONVENTIONS.md` — Aider
+  - README integration table for Gemini CLI (`GEMINI.md`) and
+    Continue.dev (`.continue/config.json` system message)
+- **Pluggable engine system** via `--engine` flag in the bash dispatcher:
+  - `engines/gemini.sh` — Gemini CLI adapter (POC, requires
+    `gemini auth login` OR `GEMINI_API_KEY`)
+  - `engines/README.md` — adapter interface spec for adding new engines
+    (~50–150 LoC per adapter)
+  - Default engine `codex` path unchanged from v0.1.x — zero regression
+    risk on the most-used path
+- **TESTING.md** — verification checklist with 4 paths verified
+  end-to-end (Claude Code → codex, Codex CLI discovery, Gemini CLI
+  discovery, `codex-oi --engine gemini` full pipeline).
+
+### Fixed
+- **PowerShell `$ErrorActionPreference='Stop'` + nested .ps1 shim bug**:
+  `Run-Exec` and `Run-Review` now scope `EAP='Continue'` around the
+  Codex pipe. Without this, the npm-shipped `codex.ps1` shim's inner
+  `& node ...` stderr banner ("Reading prompt from stdin...") was
+  wrapped as a `RemoteException` that killed the pipe before Codex
+  output reached the parser. `2>$null` does NOT suppress this — only
+  scoped EAP does. Silent catch blocks also replaced with verbose ones
+  so future similar bugs are visible.
+- **PowerShell 5.1 compat for telemetry**: `Get-Date -AsUTC` (PS 7.1+
+  only) replaced with `[DateTime]::UtcNow` so the telemetry path
+  doesn't crash on stock Windows PowerShell when enabled.
+- **Gemini headless trust check**: adapter passes `--skip-trust` so
+  Gemini doesn't refuse to run in non-interactive scripts.
+
+### Known TODOs (deferred deliberately)
+- PowerShell mirror of `--engine` flag — bash landed first so the
+  architecture was observable; ps1 still hardcodes the Codex engine.
+- More engine adapters: Claude API (anthropic SDK), Antigravity (when
+  it exposes a CLI), local LLM via ollama (OpenAI-compatible API).
+- Manual IDE-based verification: Antigravity, Cursor, Continue.dev
+  (see [TESTING.md](./TESTING.md) tests 4–7).
+
+---
+
 ## [0.1.0] — initial release
 
 ### Added
